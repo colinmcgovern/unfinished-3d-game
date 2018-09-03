@@ -1,0 +1,166 @@
+<head>
+	<script src="http://colinmcgovern.com/js/three.min.js"></script>
+	<script src="https://cdn.socket.io/socket.io-1.0.0.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+<style>
+	body { margin: 0; background-color: white; }
+	canvas { width: 100%; height: 100%; background-color: white; }
+</style>
+
+<body> 
+
+  <script>
+
+  //Generating Username Texture 
+  var camera, scene, renderer;
+  var geometry, material, mesh;
+  var x_speed = 0;
+  var y_speed = 0; 
+
+	backgroundScene = new THREE.Scene();
+	backgroundCamera = new THREE.Camera();
+
+  init();
+  //animate();
+
+  function init() {
+
+    camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.01, 100 );
+    camera.position.z = 20;
+    camera.position.y = -20;
+    camera.rotation.x = 20;
+
+    scene = new THREE.Scene();
+
+    camera.lookAt(0,0,0);
+
+	// Load the background texture
+	var texture = new THREE.TextureLoader().load("cirrus_clouds.jpg");
+	var backgroundMesh = new THREE.Mesh(
+	new THREE.PlaneGeometry(2, 2, 0),
+	new THREE.MeshBasicMaterial({
+		map: texture
+	}));
+
+	backgroundMesh .material.depthTest = false;
+	backgroundMesh .material.depthWrite = false;
+
+	backgroundScene = new THREE.Scene();
+	backgroundCamera = new THREE.Camera();
+	backgroundScene .add(backgroundCamera );
+	backgroundScene .add(backgroundMesh );
+
+    //Roach 
+    geometry = new THREE.BoxGeometry( 0.5, 0.2, 0.2 );
+    material = new THREE.MeshNormalMaterial();
+
+    mesh = new THREE.Mesh( geometry, material );
+    scene.add( mesh );
+
+    //Ground Plane
+  	var geometry = new THREE.PlaneGeometry(20,20,32);
+
+  	var texture = new THREE.TextureLoader().load("https://upload.wikimedia.org/wikipedia/commons/7/70/Checkerboard_pattern.svg");
+
+  	//material
+  	var material = new THREE.MeshBasicMaterial( { 
+  	map: texture,
+  	side: THREE.DoubleSide
+  	} );
+
+  	var plane = new THREE.Mesh( geometry, material );
+  	plane.position.z -= 1;
+  	scene.add( plane );
+
+
+    renderer = new THREE.WebGLRenderer( { antialias: true } );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( renderer.domElement );
+
+    onWindowResize();
+
+  }
+
+  //Fixing Window Size
+  window.addEventListener( 'resize', onWindowResize, false );
+
+  function onWindowResize(){
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize( window.innerWidth, window.innerHeight );
+
+  }
+
+
+  // Keyboard controls
+  var keysDown = {};
+  addEventListener('keydown', function (e) {
+  	keysDown[e.keyCode] = true;
+  }, false);
+
+  addEventListener('keyup', function (e) {  
+  	delete keysDown[e.keyCode];
+  }, false);
+
+  //Update Movement
+  function update_player(){
+  	mesh.position.y += y_speed;
+  	mesh.position.x += x_speed;
+
+  	//friction 
+  	x_speed /= 1.1;
+  	y_speed /= 1.1; 
+  }
+
+  // Update
+  var update = function(modifier){
+    if(87 in keysDown){
+    	if((65 in keysDown)||(68 in keysDown)) y_speed += 0.005;
+    	else y_speed += 0.01;
+    }
+    if(83 in keysDown){
+    	if((65 in keysDown)||(68 in keysDown)) y_speed -= 0.005;
+    	else y_speed -= 0.01;
+    }
+    if(65 in keysDown){
+    	if((87 in keysDown)||(83 in keysDown)) x_speed -= 0.005;
+    	else x_speed -= 0.01; 
+    }
+    if(68 in keysDown){
+    	if((87 in keysDown)||(83 in keysDown)) x_speed += 0.005;
+    	else x_speed += 0.01; 
+    }
+
+    update_player();
+
+    //Rendering Background 
+    
+	renderer.autoClear = false;
+	renderer.clear();
+	renderer.render(backgroundScene ,backgroundCamera);
+	
+
+    renderer.render( scene, camera );
+    
+  };
+
+
+  var mainInterval = function(){
+    var now = Date.now();
+  	var delta = now - then;
+
+  	update(delta / 1000);
+
+  	then = now;
+    requestAnimationFrame(mainInterval);
+  };
+
+  then = Date.now();
+  mainInterval();
+
+  </script>
+
+</body>

@@ -1,0 +1,243 @@
+<head>
+  <script src="http://colinmcgovern.com/js/three.min.js"></script>
+  <script src="https://cdn.socket.io/socket.io-1.0.0.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+  <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+
+<style>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font: 13px Helvetica, Arial; }
+    form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+    form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+    form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+    #messages { list-style-type: none; margin: 0; padding: 0; }
+    #messages li { padding: 5px 10px; }
+    #messages li:nth-child(odd) { background: #eee; }
+    #messages { margin-bottom: 40px }
+  </style>
+</style>
+
+<body> 
+
+  <span class="user_list"></span>
+
+  <script> 
+
+(function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='//rawgit.com/mrdoob/stats.js/master/build/stats.min.js';document.head.appendChild(script);})()
+
+  var max_users = 32; //MAKE SURE THIS MATCHES WITH SERVER, TODO GET MAX USERS SET FROM SERVER  
+
+  var user_list_html = "";
+
+  //User List
+  for(var i = 0; i < max_users; i++){
+    user_list_html += "<div class='player_1'>Player " + i + ": </div>";
+  }
+
+  $(".user_list").html(user_list_html);
+
+  //Generating username and user_id
+  var username = prompt("Please Enter Your Username");
+  var d = new Date();
+  var n = d.getTime();
+  var user_id = n + username;  
+
+  //Sending name to server 
+  var socket = io();
+  socket.emit('my_name_is',user_id);
+
+  //Receving user number from server 
+  var user_number = -1; 
+
+  function seconds_since_epoch(){ return Math.floor( Date.now() / 1000 ) }
+  var start_time = seconds_since_epoch();
+
+  socket.on('user_number', function(msg){
+
+    start_time = seconds_since_epoch();
+
+    while(user_number == -1){
+
+      if(msg.split(":")[0] == user_id){
+        user_number = msg.split(":")[1];
+      } 
+
+      if(((seconds_since_epoch()-start_time)>2))break; //ttl = 2 seconds 
+
+    }
+
+    //Client failed to connect to server 
+    if(user_number == -1){
+      alert("failed to get user number from server");
+      throw new Error("failed to get user number from server");
+    }
+
+  });
+
+  var camera, scene, renderer;
+  var geometry, material, mesh, user_array;
+  var x_speed = 0;
+  var y_speed = 0; 
+
+  backgroundScene = new THREE.Scene();
+  backgroundCamera = new THREE.Camera();
+
+  init();
+  //animate();
+
+  function init() {
+
+    camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.01, 100 );
+    camera.position.z = 20;
+    camera.position.y = -20;
+    camera.rotation.x = 20;
+    camera.lookAt(0,0,0);
+
+    scene = new THREE.Scene();
+
+    // Load the background texture
+    var texture = new THREE.TextureLoader().load("cirrus_clouds.jpg");
+    var backgroundMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2, 0),
+    new THREE.MeshBasicMaterial({
+      map: texture
+    }));
+
+    backgroundMesh .material.depthTest = false;
+    backgroundMesh .material.depthWrite = false;
+
+    backgroundScene = new THREE.Scene();
+    backgroundCamera = new THREE.Camera();
+    backgroundScene .add(backgroundCamera );
+    backgroundScene .add(backgroundMesh );
+
+    //Local Player 
+    geometry = new THREE.BoxGeometry( 0.5, 0.2, 0.2 );
+    material = new THREE.MeshNormalMaterial();
+
+    mesh = new THREE.Mesh( geometry, material );
+    scene.add(mesh);
+
+    //Ground Plane
+    var geometry = new THREE.PlaneGeometry(20,20,32);
+    var texture = new THREE.TextureLoader().load("https://upload.wikimedia.org/wikipedia/commons/7/70/Checkerboard_pattern.svg");
+
+    //material
+    var material = new THREE.MeshBasicMaterial( { 
+    map: texture,
+    side: THREE.DoubleSide
+    } );
+
+    var plane = new THREE.Mesh( geometry, material );
+    plane.position.z -= 1;
+    scene.add( plane );
+
+
+    renderer = new THREE.WebGLRenderer( { antialias: true } );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( renderer.domElement );
+
+    onWindowResize();
+
+  }
+
+  //Fixing Window Size
+  window.addEventListener( 'resize', onWindowResize, false );
+
+  function onWindowResize(){
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize( window.innerWidth, window.innerHeight );
+
+  }
+
+
+  // Keyboard controls
+  var keysDown = {};
+  addEventListener('keydown', function (e) {
+    keysDown[e.keyCode] = true;
+  }, false);
+
+  addEventListener('keyup', function (e) {  
+    delete keysDown[e.keyCode];
+  }, false);
+
+  //Update Movement
+  function update_player(){
+    mesh.position.y += y_speed;
+    mesh.position.x += x_speed;
+
+    //friction 
+    x_speed /= 1.1;
+    y_speed /= 1.1; 
+  }
+
+  function update_online_players(input){
+
+    online_player_strings = input.split(";"); 
+
+    for(i = 0; i < max_users; i++){
+      user_array[i].position.y = online_player_strings[i].split(':')[2];
+      user_array[i].position.x = online_player_strings[i].split(':')[1];
+    }
+  }
+
+  // Update
+  var update = function(modifier){
+
+    //Sending Position to Server
+    var socket = io();
+    socket.emit('position',user_number+":"+mesh.position.x+":"+mesh.position.y);
+
+    if(87 in keysDown){
+      if((65 in keysDown)||(68 in keysDown)) y_speed += 0.005;
+      else y_speed += 0.01;
+    }
+    if(83 in keysDown){
+      if((65 in keysDown)||(68 in keysDown)) y_speed -= 0.005;
+      else y_speed -= 0.01;
+    }
+    if(65 in keysDown){
+      if((87 in keysDown)||(83 in keysDown)) x_speed -= 0.005;
+      else x_speed -= 0.01; 
+    }
+    if(68 in keysDown){
+      if((87 in keysDown)||(83 in keysDown)) x_speed += 0.005;
+      else x_speed += 0.01; 
+    }
+
+    update_player();
+
+    //Rendering Background 
+    renderer.autoClear = false;
+    renderer.clear();
+    renderer.render(backgroundScene ,backgroundCamera);
+
+    renderer.render( scene, camera );
+    
+  };
+
+  var mainInterval = function(){
+
+    //Recieving Postions 
+    socket.on('position', function(msg){
+        positions = msg;
+    });  
+
+    update(delta / 1000);
+
+    requestAnimationFrame(mainInterval);
+  };
+
+  then = Date.now();
+  mainInterval();
+
+  </script>
+
+
+
+</body>
